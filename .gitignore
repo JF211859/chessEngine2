@@ -1,2 +1,5 @@
 *.zip
 *.csv
+learning_data*
+testing.py
+weights*
