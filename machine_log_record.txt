@@ -1,0 +1,4 @@
+first test custom loss function - 16.4492
+extra 512 layer - 12.2153
+set seed - 12.3121
+8 512 layers - 11.5561

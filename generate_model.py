@@ -16,15 +16,14 @@ import numpy as np
 
 
 # Environment setup
+# os.environ['TF_DETERMINISTIC_OPS'] = '1'
+# os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
+
+# tf.config.threading.set_inter_op_parallelism_threads(1)
+# tf.config.threading.set_intra_op_parallelism_threads(1)
+
+
 SEED = 42
-os.environ['TF_DETERMINISTIC_OPS'] = '1'
-os.environ['TF_CUDNN_DETERMINISTIC'] = '1'
-
-tf.config.threading.set_inter_op_parallelism_threads(1)
-tf.config.threading.set_intra_op_parallelism_threads(1)
-
-
-
 def set_seed():
     """Set all seeds and initiate deterministic mode"""
     os.environ['PYTHONHASHSEED'] = str(SEED)
@@ -100,9 +99,9 @@ def move_generator(filename: str):
 class CustomLossFunction(tf.keras.losses.Loss):
     """Custom loss function"""
 
-    def __init__(self):
-        """Boilerplate"""
-        super().__init__()
+    # def __init__(self):
+    #     """Boilerplate"""
+    #     super().__init__()
 
     def call(self, y_true, y_pred):
         """Splits both tensors in half, then does cross entropy on each halves, and summs the losses."""
@@ -110,9 +109,8 @@ class CustomLossFunction(tf.keras.losses.Loss):
         from_y_true, to_y_true = tf.split(y_true, [64, 64], 1)
         from_y_pred, to_y_pred = tf.split(y_pred, [64, 64], 1)
 
-        return tf.keras.losses.categorical_crossentropy(
-            from_y_true, from_y_pred
-        ) + tf.keras.losses.categorical_crossentropy(to_y_true, to_y_pred)
+        return tf.keras.losses.categorical_crossentropy(from_y_true, from_y_pred) + \
+            tf.keras.losses.categorical_crossentropy(to_y_true, to_y_pred)
 
 
 class CustomAccuracyFunction(tf.keras.metrics.Metric):
@@ -132,8 +130,11 @@ class CustomAccuracyFunction(tf.keras.metrics.Metric):
         return count
 
     @tf.autograph.experimental.do_not_convert
-    def update_state(self, y_true, y_pred, sample_weight = None): #pylint : disable=arguments-differ
-        """Splits both tensors in half, then does cross entropy on each halves, and summs the losses."""
+    def update_state(self, *args, **kwargs): #pylint : disable=arguments-differ
+        """Splits both tensors in half, adds one to correct for each half is correct, adds ."""
+
+        y_pred = args[0]
+        y_true = args[1]
 
         y_pred = tf.cast(y_pred, dtype=tf.float32)
         y_true = tf.cast(y_true, dtype=tf.float32)
@@ -195,42 +196,46 @@ def main():
         ),
     ).batch(32)
 
-    set_seed()
+    losses = []
 
-    layer_array = []
+    for _ in range(10):
 
-    for _ in range(1):
-        layer_array.append(tf.keras.layers.Dense(512, activation="relu"))
+        layer_array = []
 
-    for _ in range(1):
-        layer_array.append(tf.keras.layers.Dense(256, activation="relu"))
+        for _ in range(1):
+            layer_array.append(tf.keras.layers.Dense(512, activation="relu"))
 
-    layer_array.append(tf.keras.layers.Dense(128, activation="relu"))
-    layer_array.append(tf.keras.layers.Dense(128, activation="sigmoid"))
+        for _ in range(1):
+            layer_array.append(tf.keras.layers.Dense(256, activation="relu"))
 
-    model = tf.keras.Sequential(layer_array)
+        layer_array.append(tf.keras.layers.Dense(128, activation="relu"))
+        layer_array.append(tf.keras.layers.Dense(128, activation="sigmoid"))
 
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-        loss=CustomLossFunction(),
-        # loss=tf.keras.losses.CategoricalCrossentropy(),
-        metrics=[
-            CustomAccuracyFunction(),
-            # tf.keras.metrics.CategoricalAccuracy()
-        ],
-    )
+        model = tf.keras.Sequential(layer_array)
 
-    model.fit(
-        train_dataset.repeat(),
-        # validation_data=test_dataset,
-        epochs=1,
-        # steps_per_epoch=100000,
-        steps_per_epoch=50000,
-        # steps_per_epoch=100,
-        # validation_steps=100,
-    )
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+            loss=CustomLossFunction(),
+            # loss=tf.keras.losses.CategoricalCrossentropy(),
+            metrics=[
+                CustomAccuracyFunction(),
+                # tf.keras.metrics.CategoricalAccuracy()
+            ],
+        )
 
-    model.evaluate(validate_dataset, steps=15306)
+        model.fit(
+            train_dataset.repeat(),
+            # validation_data=test_dataset,
+            epochs=1,
+            # steps_per_epoch=100000,
+            steps_per_epoch=500,
+            # steps_per_epoch=100,
+            # validation_steps=100,
+        )
+
+        losses.append(model.evaluate(validate_dataset, steps=500))
+    
+    print(np.mean(losses))
 
     # file_name = "./weights/layers_256_" + str(num_layers)
 
