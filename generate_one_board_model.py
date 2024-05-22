@@ -120,7 +120,7 @@ def main():
         layer_array = []
 
         layers = [
-            (512, 4),
+            (512, parameter),
             (256, 4),
             (128, 4)
         ]
