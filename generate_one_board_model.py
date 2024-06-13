@@ -65,28 +65,48 @@ def move_generator(filename: str):
         index_col=0,
     )
 
+    move_turn_filter = range(0,10)
+
     boards = list(df["Board"])
     elos = list(df["Elo"])
     white_to_moves = list(df["WhiteToMove"])
     moves = list(df["move"])
+    turn_numbers = list(df["TurnNumber"])
 
-    for board_string, elo, white_to_move, move_string in zip(
-        boards, elos, white_to_moves, moves
+    for board_string, elo, white_to_move, move_string, turn_number_string in zip(
+        boards, elos, white_to_moves, moves, turn_numbers
     ):
 
-        boards_list = literal_eval(board_string)
-        move_list = literal_eval(move_string)
+        turn_number = int(turn_number_string)
 
-        feature_tensor = get_feature_tensor(boards_list, elo, white_to_move)
+        if turn_number in move_turn_filter:
 
-        # modify to get to or from board !
-        target_tensor = get_target_tensor(move_list, to_board=True)
+            boards_list = literal_eval(board_string)
+            move_list = literal_eval(move_string)
 
-        yield feature_tensor, target_tensor
+            feature_tensor = get_feature_tensor(boards_list, elo, white_to_move)
+
+            # modify to get to or from board !
+            target_tensor = get_target_tensor(move_list, to_board=True)
+
+            yield feature_tensor, target_tensor
+
+def save_model(model, model_name):
+    """Saves model"""
+
+
+    file_name = "./weights/" + model_name
+
+    while os.path.exists(file_name):
+        file_name = file_name + "1"
+
+    model.save_weights(file_name)
 
 
 def main():
     """Main function"""
+
+    full_run = True
 
     train_dataset = tf.data.Dataset.from_generator(
         move_generator,
@@ -97,14 +117,16 @@ def main():
         ),
     ).batch(32)
 
-    test_dataset = tf.data.Dataset.from_generator(
-        move_generator,
-        args=["learning_data/test_data.csv"],
-        output_signature=(
-            tf.TensorSpec(shape=(770,), dtype=tf.int32),
-            tf.TensorSpec(shape=(64,), dtype=tf.int32),
-        ),
-    ).batch(32)
+    if full_run:
+
+        test_dataset = tf.data.Dataset.from_generator(
+            move_generator,
+            args=["learning_data/test_data.csv"],
+            output_signature=(
+                tf.TensorSpec(shape=(770,), dtype=tf.int32),
+                tf.TensorSpec(shape=(64,), dtype=tf.int32),
+            ),
+        ).batch(32)
 
     validate_dataset = tf.data.Dataset.from_generator(
         move_generator,
@@ -115,50 +137,59 @@ def main():
         ),
     ).batch(32)
 
-    for parameter in [4, 8, 16, 32]:
+    # for parameter in [0.99, 0.999, 1]:
 
-        layer_array = []
+    layer_array = []
 
-        layers = [
-            (512, parameter),
-            (256, 4),
-            (128, 4)
-        ]
+    layers = [
+        (512, 2), # Tested
+        (256, 2), # Tested
+        (128, 3),  # Tested
+    ]
 
-        for layer_tuple in layers:
-            for _ in range(layer_tuple[1]):
-                layer_array.append(tf.keras.layers.Dense(layer_tuple[0], activation="relu"))
+    for layer_tuple in layers:
+        for _ in range(layer_tuple[1]):
+            layer_array.append(tf.keras.layers.Dense(layer_tuple[0], activation="relu"))
 
-        layer_array.append(tf.keras.layers.Dense(64, activation="sigmoid"))
+    layer_array.append(tf.keras.layers.Dense(64, activation="softmax"))
 
-        model = tf.keras.Sequential(layer_array)
+    model = tf.keras.Sequential(layer_array)
 
-        model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-            loss=tf.keras.losses.CategoricalCrossentropy(),
-            metrics=[tf.keras.metrics.CategoricalAccuracy()],
-        )
+    model.compile(
+        optimizer=tf.keras.optimizers.Adam(
+            learning_rate=2e-4,  # Tested
+            beta_1=0.6,          # Tested
+            beta_2=0.999,        # Tested
+            ),
+        loss=tf.keras.losses.CategoricalCrossentropy(),
+        metrics=[tf.keras.metrics.CategoricalAccuracy()],
+    )
 
-        # Test Run
+    if full_run:
+
         model.fit(
             train_dataset.repeat(),
+            validation_data=test_dataset,
+            epochs=10,
             steps_per_epoch=100000,
+            validation_steps=10000,
         )
 
-        print(f"Parameter = {parameter}")
+        model.evaluate(validate_dataset, steps=100000)
 
-        model.evaluate(validate_dataset, steps=10000)
+        save_model(model, "to_early_model")
 
-        # Full Run
-        # model.fit(
-        #     train_dataset.repeat(),
-        #     validation_data=test_dataset,
-        #     epochs=10,
-        #     steps_per_epoch=100000,
-        #     validation_steps=10000,
-        # )
+    else:
 
-        # model.evaluate(validate_dataset, steps=100000)
+        model.fit(
+            train_dataset.repeat(),
+            steps_per_epoch=10000,
+        )
+
+        # print(f"Parameter = {parameter}")
+
+        model.evaluate(validate_dataset, steps=1000)
+
 
 
 if __name__ == "__main__":

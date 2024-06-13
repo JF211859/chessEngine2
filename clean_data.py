@@ -30,6 +30,7 @@ class BoardState:
         self.moves: List[str] = self.__list_of_moves(moves_string)
         self.white_to_move: bool = True
         self.board: chess.Board = chess.Board()
+        self.turn_number = 0
 
     def __peek_move(self) -> chess.Move:
         """Get next mvove"""
@@ -49,6 +50,8 @@ class BoardState:
         move = self.__pop_move()
         self.board.push(move)
         self.white_to_move = not self.white_to_move
+        if self.white_to_move:
+            self.turn_number += 1
 
     def get_features(self) -> Tuple[List[List[int]], int, bool]:
         """Gets a tuple of features"""
@@ -161,6 +164,7 @@ def main() -> None:
     elos = []
     white_to_moves = []
     targets = []
+    turn_numbers = []
 
     for white_elo, black_elo, moves in tqdm(
         zip(games["WhiteElo"], games["BlackElo"], games["Moves"]), total=76557
@@ -177,6 +181,7 @@ def main() -> None:
             boards.append(features[0])
             elos.append(features[1])
             white_to_moves.append(features[2])
+            turn_numbers.append(board_state.turn_number)
             targets.append(board_state.get_target())
 
             board_state.make_next_move()
@@ -189,6 +194,7 @@ def main() -> None:
         print(elos)
         print(white_to_moves)
         print(targets)
+        print(turn_numbers)
 
     if not DEBUG:
 
@@ -223,6 +229,7 @@ def main() -> None:
                 "Elo": [elos[i] for i in train_idxs],
                 "WhiteToMove": [white_to_moves[i] for i in train_idxs],
                 "move": [targets[i] for i in train_idxs],
+                "TurnNumber": [turn_numbers[i] for i in train_idxs],
             }
         )
 
@@ -232,6 +239,7 @@ def main() -> None:
                 "Elo": [elos[i] for i in test_idxs],
                 "WhiteToMove": [white_to_moves[i] for i in test_idxs],
                 "move": [targets[i] for i in test_idxs],
+                "TurnNumber": [turn_numbers[i] for i in test_idxs],
             }
         )
 
@@ -241,6 +249,7 @@ def main() -> None:
                 "Elo": [elos[i] for i in validate_idxs],
                 "WhiteToMove": [white_to_moves[i] for i in validate_idxs],
                 "move": [targets[i] for i in validate_idxs],
+                "TurnNumber": [turn_numbers[i] for i in validate_idxs],
             }
         )
 

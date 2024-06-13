@@ -3,3 +3,5 @@
 learning_data*
 testing.py
 weights*
+__pycache__*
+testing.ipynb
