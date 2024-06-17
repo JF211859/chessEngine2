@@ -65,7 +65,7 @@ def move_generator(filename: str):
         index_col=0,
     )
 
-    move_turn_filter = range(0,10)
+    move_turn_filter = range(10,25)
 
     boards = list(df["Board"])
     elos = list(df["Elo"])
@@ -177,7 +177,7 @@ def main():
 
         model.evaluate(validate_dataset, steps=100000)
 
-        save_model(model, "to_early_model")
+        save_model(model, "to_middle_model")
 
     else:
 
