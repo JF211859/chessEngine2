@@ -1,9 +1,9 @@
 """
-This module creates the csv that can be placed used to train the nueral network
+This module creates the csv that can be placed used to train the neural network
 
-The features should be 14 concatenated bitboards, for each different piece.
+The features should be 14 concatenated bit board, for each different piece.
 
-The label is 2 bitbords, the from square and to square.
+The label is 2 bit boards, the from square and to square.
 """
 
 # Imports
@@ -12,7 +12,7 @@ from math import floor
 import re
 
 
-import chess #pylint: disable=import-error
+import chess # type: ignore #pylint: disable=import-error
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -33,12 +33,12 @@ class BoardState:
         self.turn_number = 0
 
     def __peek_move(self) -> chess.Move:
-        """Get next mvove"""
+        """Get next move"""
 
         return self.board.parse_san(self.moves[0])
 
     def __pop_move(self) -> chess.Move:
-        """Get next mvove"""
+        """Get next move"""
 
         next_move = self.board.parse_san(self.moves[0])
         self.moves.pop(0)
@@ -53,19 +53,46 @@ class BoardState:
         if self.white_to_move:
             self.turn_number += 1
 
+    def flip_board(self, boards : List[List[int]]) -> List[List[int]]:
+        """Flips a board"""
+
+        # Flips positions
+        boards = [[63 - square for square in board] for board in boards]
+
+        # # Flips colors
+        temp = boards[:6]
+        boards[:6] = boards[6:]
+        boards[6:] = temp
+
+        return boards
+
     def get_features(self) -> Tuple[List[List[int]], int, bool]:
         """Gets a tuple of features"""
 
+        # TODO, change how the features work to always be from the perspective of white
+        # Flip the board around if it is black to move, and report the board from blacks perspective
+        # Easier way of doing this might be to throw out all black / white moves in training.
+
+        boards = self.__parse_current_board()
+
+        if not self.white_to_move:
+
+            boards = self.flip_board(boards)
+
         return (
-            self.__parse_current_board(),
+            boards,
             self.white_elo if self.white_to_move else self.black_elo,
-            self.white_to_move,
         )
 
     def get_target(self) -> List[List[int]]:
-        """Returns move baords"""
+        """Returns move boards"""
 
-        return self.__parse_move(self.__peek_move())
+        move = self.__parse_move(self.__peek_move())
+
+        if not self.white_to_move:
+            move = self.flip_board(move)
+
+        return move
 
     def no_more_moves(self) -> bool:
         """Returns a boolean that is true if no more moves are present"""
@@ -74,9 +101,9 @@ class BoardState:
 
     def __parse_current_board(self) -> List[List[int]]:
         """
-        Converts a fen string to bytes that represent fourteen boards.  Where the first
+        Converts a fen string to bytes that represent twelve boards.  Where the first
         64 bits is a bit mask of the chess board, where a 1 indicates that a white pawn
-        exists there.  There should be fourteen different bit boards for all the different
+        exists there.  There should be twelve different bit boards for all the different
         pieces, ordered as follows:
         * White Pawns
         * White Rooks
@@ -92,7 +119,7 @@ class BoardState:
         * Black Kings
         """
 
-        piece_tpyes = [
+        piece_types = [
             (chess.PAWN, chess.WHITE),
             (chess.ROOK, chess.WHITE),
             (chess.KNIGHT, chess.WHITE),
@@ -109,7 +136,7 @@ class BoardState:
 
         bit_boards = []
 
-        for piece_type in piece_tpyes:
+        for piece_type in piece_types:
 
             bit_boards.append(list(self.board.pieces(*piece_type)))
 
@@ -118,7 +145,7 @@ class BoardState:
     def __parse_move(self, move: chess.Move) -> List[List[int]]:
         """
         Converts a move in standard algebraic notation to a series of bytes that
-        represent two bit boards, where the first bit board is the sqaure that the
+        represent two bit boards, where the first bit board is the square that the
         piece moves from, and the second bit board is the square that the piece moves to.
         """
 
@@ -162,12 +189,12 @@ def main() -> None:
 
     boards = []
     elos = []
-    white_to_moves = []
+    # white_to_moves = []
     targets = []
     turn_numbers = []
 
     for white_elo, black_elo, moves in tqdm(
-        zip(games["WhiteElo"], games["BlackElo"], games["Moves"]), total=76557
+        zip(games["WhiteElo"], games["BlackElo"], games["Moves"])
     ):
 
         # For each game initialize a new board
@@ -180,7 +207,7 @@ def main() -> None:
             features = board_state.get_features()
             boards.append(features[0])
             elos.append(features[1])
-            white_to_moves.append(features[2])
+            # white_to_moves.append(features[2])
             turn_numbers.append(board_state.turn_number)
             targets.append(board_state.get_target())
 
@@ -189,10 +216,13 @@ def main() -> None:
         if DEBUG:
             break
 
+        if len(boards) > 1000000:
+            break
+
     if DEBUG:
         print(boards)
         print(elos)
-        print(white_to_moves)
+        # print(white_to_moves)
         print(targets)
         print(turn_numbers)
 
@@ -227,7 +257,7 @@ def main() -> None:
             {
                 "Board": [boards[i] for i in train_idxs],
                 "Elo": [elos[i] for i in train_idxs],
-                "WhiteToMove": [white_to_moves[i] for i in train_idxs],
+                # "WhiteToMove": [white_to_moves[i] for i in train_idxs],
                 "move": [targets[i] for i in train_idxs],
                 "TurnNumber": [turn_numbers[i] for i in train_idxs],
             }
@@ -237,7 +267,7 @@ def main() -> None:
             {
                 "Board": [boards[i] for i in test_idxs],
                 "Elo": [elos[i] for i in test_idxs],
-                "WhiteToMove": [white_to_moves[i] for i in test_idxs],
+                # "WhiteToMove": [white_to_moves[i] for i in test_idxs],
                 "move": [targets[i] for i in test_idxs],
                 "TurnNumber": [turn_numbers[i] for i in test_idxs],
             }
@@ -247,7 +277,7 @@ def main() -> None:
             {
                 "Board": [boards[i] for i in validate_idxs],
                 "Elo": [elos[i] for i in validate_idxs],
-                "WhiteToMove": [white_to_moves[i] for i in validate_idxs],
+                # "WhiteToMove": [white_to_moves[i] for i in validate_idxs],
                 "move": [targets[i] for i in validate_idxs],
                 "TurnNumber": [turn_numbers[i] for i in validate_idxs],
             }

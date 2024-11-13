@@ -34,7 +34,7 @@ def parse_boards(boards: List[int]) -> np.ndarray:
     return board_array.flatten()
 
 
-def get_feature_tensor(boards: List[int], elo: int, white_to_move: bool) -> tf.Tensor:
+def get_feature_tensor(boards: List[int], elo: int) -> tf.Tensor:
     """Generate the feature tensors from a list of boards, the elo, and whose turn it is"""
 
     boards_array = parse_boards(boards)
@@ -42,7 +42,6 @@ def get_feature_tensor(boards: List[int], elo: int, white_to_move: bool) -> tf.T
         (
             boards_array,
             np.array([elo], dtype=np.int32),
-            np.array([1] if white_to_move else [0], dtype=np.int32),
         )
     )
 
@@ -65,31 +64,31 @@ def move_generator(filename: str):
         index_col=0,
     )
 
-    move_turn_filter = range(10,25)
+    # move_turn_filter = range(10,25)
 
     boards = list(df["Board"])
     elos = list(df["Elo"])
-    white_to_moves = list(df["WhiteToMove"])
+    # white_to_moves = list(df["WhiteToMove"])
     moves = list(df["move"])
-    turn_numbers = list(df["TurnNumber"])
+    # turn_numbers = list(df["TurnNumber"])
 
-    for board_string, elo, white_to_move, move_string, turn_number_string in zip(
-        boards, elos, white_to_moves, moves, turn_numbers
+    for board_string, elo, move_string in zip(
+        boards, elos, moves#, turn_numbers
     ):
 
-        turn_number = int(turn_number_string)
+        # turn_number = int(turn_number_string)
 
-        if turn_number in move_turn_filter:
+        # if turn_number in move_turn_filter:
 
-            boards_list = literal_eval(board_string)
-            move_list = literal_eval(move_string)
+        boards_list = literal_eval(board_string)
+        move_list = literal_eval(move_string)
 
-            feature_tensor = get_feature_tensor(boards_list, elo, white_to_move)
+        feature_tensor = get_feature_tensor(boards_list, elo)
 
-            # modify to get to or from board !
-            target_tensor = get_target_tensor(move_list, to_board=True)
+        # modify to get to or from board !
+        target_tensor = get_target_tensor(move_list, to_board=True)
 
-            yield feature_tensor, target_tensor
+        yield feature_tensor, target_tensor
 
 def save_model(model, model_name):
     """Saves model"""
@@ -112,7 +111,7 @@ def main():
         move_generator,
         args=["learning_data/train_data.csv"],
         output_signature=(
-            tf.TensorSpec(shape=(770,), dtype=tf.int32),
+            tf.TensorSpec(shape=(769,), dtype=tf.int32),
             tf.TensorSpec(shape=(64,), dtype=tf.int32),
         ),
     ).batch(32)
@@ -123,7 +122,7 @@ def main():
             move_generator,
             args=["learning_data/test_data.csv"],
             output_signature=(
-                tf.TensorSpec(shape=(770,), dtype=tf.int32),
+                tf.TensorSpec(shape=(769,), dtype=tf.int32),
                 tf.TensorSpec(shape=(64,), dtype=tf.int32),
             ),
         ).batch(32)
@@ -132,7 +131,7 @@ def main():
         move_generator,
         args=["learning_data/validate_data.csv"],
         output_signature=(
-            tf.TensorSpec(shape=(770,), dtype=tf.int32),
+            tf.TensorSpec(shape=(769,), dtype=tf.int32),
             tf.TensorSpec(shape=(64,), dtype=tf.int32),
         ),
     ).batch(32)
@@ -177,7 +176,7 @@ def main():
 
         model.evaluate(validate_dataset, steps=100000)
 
-        save_model(model, "to_middle_model")
+        save_model(model, "to_model")
 
     else:
 
